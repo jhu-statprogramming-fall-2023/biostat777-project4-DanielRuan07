@@ -2,4 +2,4 @@
 
 Daniel Ruan  
 
-Project 4 dashboard: https://danielruan.shinyapps.io/Project4/
+Deployed dashboard: https://danielruan.shinyapps.io/Project4/
