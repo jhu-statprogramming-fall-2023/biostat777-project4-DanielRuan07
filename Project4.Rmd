@@ -1,0 +1,494 @@
+---
+title: "Project4"
+output:
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: fill
+runtime: shiny
+resource_files:
+- data/mlb_odds_2017.rda
+- data/mlb_odds_2019.rda
+- data/nba_odds_2019.rda
+- data/nba_odds_2020.rda
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(shiny)
+```
+
+```{r, warning=FALSE, message=FALSE, echo = FALSE}
+library(teamcolors)
+library(here)
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+library(lubridate)
+library(forcats)
+library(usethis)
+library(readr)
+library(purrr)
+```
+
+```{r, warning=FALSE, message=FALSE, echo = FALSE}
+if (!dir.exists(here("data"))) {
+    dir.create(here("data"))
+}
+
+rds_files <- c("mlb_odds_2017.RDS", "mlb_odds_2019.RDS", "nba_odds_2019.RDS","nba_odds_2020.RDS")
+
+if (any(!file.exists(here("data", rds_files)))) {
+    ## If we don't, then download the data
+    mlb_odds_2017 <- readr::read_csv("https://raw.githubusercontent.com/DanielRuan07/data/main/mlb_odds_2017.csv")
+    mlb_odds_2019 <- readr::read_csv("https://raw.githubusercontent.com/DanielRuan07/data/main/mlb_odds_2019.csv")
+    nba_odds_2019 <- readr::read_csv("https://raw.githubusercontent.com/DanielRuan07/data/main/nba_odds_2019.csv")
+    nba_odds_2020 <- readr::read_csv("https://raw.githubusercontent.com/DanielRuan07/data/main/nba_odds_2020.csv")
+
+    saveRDS(mlb_odds_2017, file = here("data", "mlb_odds_2017.RDS"))
+    saveRDS(mlb_odds_2019, file = here("data", "mlb_odds_2019.RDS"))
+    saveRDS(nba_odds_2019, file = here("data", "nba_odds_2019.RDS"))
+    saveRDS(nba_odds_2020, file = here("data", "mlb_odds_2020.RDS"))
+}
+```
+
+
+# About
+
+## Column {data-width="650"}
+
+### **Purpose**
+
+The purpose of this dashboard is to serve as a reference tool for people that are interested in sports betting.
+
+### **Data Source**
+
+The data used in this dashboard came from [Sports-Statistics.com](https://sports-statistics.com/sports-data/).
+
+## Column {data-width="650"}
+
+### **Video Demo**
+
+[![IMAGE_ALT](https://img.youtube.com/vi/-9QMNYvh0Co/hqdefault.jpg)](https://youtu.be/-9QMNYvh0Co)
+
+# Data
+
+## Column {data-width="650"}
+
+### **Data Dictionary**
+
+#### MLB Data
+
+| variable           | class     | description                                          |
+|:----------------------|:------------------|:-----------------------------|
+| date               | character | date of the game                                     |
+| game               | integer   | game number                                          |
+| away_abbrev        | character | abbreviation of away team name                       |
+| home_abbrev        | character | abbreviation of home team name                       |
+| away_name          | character | away team name                                       |
+| home_name          | character | home team name                                       |
+| away_score         | integer   | final away team score                                |
+| home_score         | integer   | final home team score                                |
+| away_open_ml       | integer   | first away team moneyline                            |
+| home_open_ml       | integer   | first home team moneyline                            |
+| away_run_line      | double    | away team run line                                   |
+| home_run_line      | double    | home team run line                                   |
+| away_run_line_odds | integer   | odds for away team run line                          |
+| home_run_line_odds | integer   | odds for home team run line                          |
+| open_ou_line       | double    | first Over/Under line for total runs scored          |
+| open_ou_odds       | integer   | odds for first Over/Under line for total runs scored |
+| close_ou_line      | double    | last Over/Under line for total runs scored           |
+| close_ou_odds      | integer   | odds for last Over/Under line for total runs scored  |
+
+#### NBA Data
+
+| variable   | class     | description           |
+|:-----------|:----------|:----------------------|
+| date       | character | date of the game      |
+| game       | integer   | game number           |
+| away_name  | character | away team name        |
+| home_name  | character | home team name        |
+| away_score | integer   | final away team score |
+| home_score | integer   | final home team score |
+| away_ml    | integer   | away team moneyline   |
+| home_ml    | integer   | home team moneyline   |
+
+## Column {data-width="350"}
+
+### Data
+
+```{r DTprep, echo=FALSE}
+# Create the dataframe for the DT table
+DT_df <- nba_odds_2020 
+```
+
+```{r DT, echo=FALSE}
+# Make the DT table
+DT::renderDataTable({
+  DT::datatable(DT_df,
+                options = list(autoWidth = TRUE,
+                               pageLength = 10,
+                               scroller = TRUE,
+                               scrollY = '500px'))
+})
+```
+
+# Calculator
+
+```{r}
+ui <- fluidPage(
+  titlePanel("Betting Odds Calculator"),
+  sidebarLayout(
+    sidebarPanel(
+      textInput("wager", "Enter Wager", ""),
+      numericInput("odds", "Enter Odds (American)", -110),
+      actionButton("calculate", "Calculate Payout")
+    ),
+    mainPanel(
+      h4("Earning:"),
+      textOutput("payout")
+    )
+  )
+)
+
+server <- function(input, output) {
+  output$payout <- renderText({
+    req(input$wager, input$odds, input$calculate)
+    wager <- as.numeric(input$wager)
+    odds <- as.numeric(input$odds)
+    
+    if (odds > 0) {
+      payout <- wager * odds / 100
+    }
+    else {
+      payout <- wager * -1 / (odds / 100)
+    }
+    sprintf("$%.2f", payout)
+  })
+}
+
+shinyApp(ui, server)
+
+```
+
+# NBA Team Stats
+
+```{r}
+nba_colors <- teamcolors::teamcolors %>%
+  filter(league == "nba") %>%
+  rename(team = name) %>%
+  select(team, primary)
+
+win_percentages <- nba_odds_2019 %>%
+  filter(game <= 1230) %>%
+  mutate(winner = ifelse(away_score > home_score, away_name, home_name)) %>%
+  group_by(team = winner) %>%
+  summarize(
+    total_wins = sum(winner == away_name | winner == home_name)
+  ) %>%
+  left_join(nba_colors, by = "team") %>%
+  mutate(win_percentage = (total_wins / 82) * 100) 
+
+
+ui2 <- fluidPage(
+  titlePanel("Win Percentage Bar Graph"),
+  sidebarLayout(
+    sidebarPanel(
+      checkboxGroupInput("teams", label = "Choose teams",
+            choices = c("Hawks" = "Atlanta Hawks",
+                        "Celtics" = "Boston Celtics",
+                        "Nets" = "Brooklyn Nets",
+                        "Hornets" = "Charlotte Hornets",
+                        "Bulls" = "Chicago Bulls",
+                        "Cavaliers" = "Cleveland Cavaliers",
+                        "Mavericks" = "Dallas Mavericks",
+                        "Nuggets" = "Denver Nuggets",
+                        "Pistons" = "Detroit Pistons",
+                        "Warriors" = "Golden State Warriors",
+                        "Rockets" = "Houston Rockets",
+                        "Pacers" = "Indiana Pacers",
+                        "Clippers" = "Los Angeles Clippers",
+                        "Lakers" = "Los Angeles Lakers", 
+                        "Grizzlies" = "Memphis Grizzlies",
+                        "Heat" = "Miami Heat",
+                        "Bucks" = "Milwaukee Bucks",
+                        "Timberwolves" = "Minnesota Timberwolves",
+                        "Pelicans" = "New Orleans Pelicans",
+                        "Knicks" = "New York Knicks",
+                        "Thunder" = "Oklahoma City Thunder",
+                        "Magic" = "Orlando Magic",
+                        "76ers" = "Philadelphia 76ers",
+                        "Suns" = "Phoenix Suns",
+                        "Trail Blazers" = "Portland Trail Blazers",
+                        "Kings" = "Sacramento Kings",
+                        "Spurs" = "San Antonio Spurs",
+                        "Raptors" = "Toronto Raptors",
+                        "Jazz" = "Utah Jazz",
+                        "Wizards" = "Washington Wizards"),
+                        selected = c("Atlanta Hawks", "Boston Celtics"))
+    ),
+    mainPanel(
+      plotOutput("bar")
+    )
+  )
+)
+
+server2 <- function(input, output) {
+  
+  selected_data <- reactive({
+    win_percentages %>%
+      filter(team %in% input$teams)
+  })
+
+  output$bar <- renderPlot({
+    ggplot(selected_data(), aes(x= team, y = win_percentage, fill = as.factor(team))) +
+      geom_bar(position = "dodge", stat = "identity", color = "black") +
+      labs(title = "Win Percentage Distribution by Team",
+           subtitle = "2019 Season",
+           x = "Team Name",
+           y = "Win Percentage") +
+      theme_minimal() + 
+      scale_fill_viridis_d(name = "") +
+      theme(legend.position="bottom")
+  })
+}
+
+shinyApp(ui2, server2)
+
+```
+
+
+# MLB Season Moneyline
+
+## Column {.tabset}
+
+### 2017 Season
+```{r}
+US2Implied <- function(american, precision = 4) {
+  US2ImpliedHelper <- function(one_american, precisionHelper = precision) {
+    if (one_american >= 100) {
+      return(round(100/(one_american + 100), precisionHelper))
+    } else if (one_american <= -100) {
+      return(round((-1.0 * one_american)/(-1.0 * one_american + 100), precisionHelper))
+    } else {
+      return(NA)
+    }
+  }
+
+  return(sapply(american, US2ImpliedHelper))
+}
+
+Implied2US <- function(implied, precision = 4) {
+  Implied2USHelper <- function(one_implied, precisionHelper = precision) {
+    if ((one_implied >= 0.5) & (one_implied <= 1)) {
+      return(round((100 * one_implied)/(-1 + one_implied), precisionHelper))
+    } else if ((one_implied >= 0) & (one_implied < 0.5)) {
+      return(round((100 - 100 * one_implied)/one_implied, precisionHelper))
+    } else {
+      return(NA)
+    }
+  }
+
+  return(sapply(implied, Implied2USHelper))
+}
+```
+
+```{r, message = FALSE, warning = FALSE}
+mlb_colors <- teamcolors::teamcolors %>%
+  filter(league == "mlb") %>%
+  rename(team = name) %>%
+  select(team, primary)
+
+away_team_lines <- mlb_odds_2017 %>%
+  select(away_name, away_close_ml) %>%
+  mutate(implied_ml = US2Implied(away_close_ml)) %>%
+  rename(team = away_name) %>%
+  select(team, implied_ml)
+
+home_team_lines <- mlb_odds_2017 %>%
+  select(home_name, home_close_ml) %>%
+  mutate(implied_ml = US2Implied(home_close_ml)) %>%
+  rename(team = home_name) %>%
+  select(team, implied_ml)
+
+avg_2017_mlb_ml <- rbind(away_team_lines, home_team_lines) %>%
+  group_by(team) %>%
+  summarize(avg_implied_ml = mean(implied_ml),
+            avg_ml_line = Implied2US(mean(implied_ml))) %>%
+  left_join(mlb_colors, by = "team") %>%
+  arrange(desc(avg_ml_line)) %>%
+  slice(-n()) %>%
+  mutate(team = fct_reorder(team, avg_ml_line, .desc = TRUE),
+         primary = fct_reorder(primary, avg_ml_line, .desc = TRUE)) %>%
+  ungroup()
+
+avg_2017_mlb_ml %>%
+  ggplot(aes(x = team, y = avg_ml_line, label = avg_ml_line)) +
+  geom_col(fill = avg_2017_mlb_ml$primary) +
+  coord_flip() +
+  labs(y = "Average Moneyline",
+       x = "Team Name",
+       title = "Average moneyline for each team during\nthe 2017 MLB Season",
+       subtitle = "Cleveland Indians has the lowest ML on average",
+       caption = "Data Source: Sports-Statistics.com ")
+
+```
+
+### 2019 Season
+```{r, message = FALSE, warning = FALSE}
+mlb_colors <- teamcolors::teamcolors %>%
+  filter(league == "mlb") %>%
+  rename(team = name) %>%
+  select(team, primary)
+
+away_team_lines <- mlb_odds_2019 %>%
+  select(away_name, away_close_ml) %>%
+  mutate(implied_ml = US2Implied(away_close_ml)) %>%
+  rename(team = away_name) %>%
+  select(team, implied_ml)
+
+home_team_lines <- mlb_odds_2019 %>%
+  select(home_name, home_close_ml) %>%
+  mutate(implied_ml = US2Implied(home_close_ml)) %>%
+  rename(team = home_name) %>%
+  select(team, implied_ml)
+
+avg_2019_mlb_ml <- rbind(away_team_lines, home_team_lines) %>%
+  group_by(team) %>%
+  summarize(avg_implied_ml = mean(implied_ml),
+            avg_ml_line = Implied2US(mean(implied_ml))) %>%
+  left_join(mlb_colors, by = "team") %>%
+  arrange(desc(avg_ml_line)) %>%
+  slice(-n()) %>%
+  mutate(team = fct_reorder(team, avg_ml_line, .desc = TRUE),
+         primary = fct_reorder(primary, avg_ml_line, .desc = TRUE)) %>%
+  ungroup()
+
+avg_2019_mlb_ml %>%
+  ggplot(aes(x = team, y = avg_ml_line, label = avg_ml_line)) +
+  geom_col(fill = avg_2019_mlb_ml$primary) +
+  coord_flip() +
+  labs(y = "Average Moneyline",
+       x = "Team Name",
+       title = "Average moneyline for each team during\nthe 2019 MLB Season",
+       subtitle = "Houston Astros has the lowest ML on average",
+       caption = "Data Source: Sports-Statistics.com ")
+
+```
+
+# NBA Season Moneyline
+```{r}
+nba_colors <- teamcolors::teamcolors %>%
+  filter(league == "nba") %>%
+  rename(team = name) %>%
+  select(team, primary)
+
+away_team_lines <- nba_odds_2020 %>%
+  select(away_name, away_ml) %>%
+  mutate(implied_ml = US2Implied(away_ml)) %>%
+  rename(team = away_name) %>%
+  select(team, implied_ml)
+
+home_team_lines <- nba_odds_2020 %>%
+  select(home_name, home_ml) %>%
+  mutate(implied_ml = US2Implied(home_ml)) %>%
+  rename(team = home_name) %>%
+  select(team, implied_ml)
+
+avg_2020_nba_ml <- rbind(away_team_lines, home_team_lines) %>%
+  group_by(team) %>%
+  summarize(avg_implied_ml = mean(implied_ml),
+            avg_ml_line = Implied2US(mean(implied_ml))) %>%
+  left_join(nba_colors, by = "team") %>%
+  arrange(desc(avg_ml_line)) %>%
+  slice(-n()) %>%
+  mutate(team = fct_reorder(team, avg_ml_line, .desc = TRUE),
+         primary = fct_reorder(primary, avg_ml_line, .desc = TRUE)) %>%
+  ungroup()
+
+avg_2020_nba_ml %>%
+  ggplot(aes(x = team, y = avg_ml_line, label = avg_ml_line)) +
+  geom_col(fill = avg_2020_nba_ml$primary) +
+  coord_flip() +
+  labs(y = "Average Moneyline",
+       x = "Team Name",
+       title = "Average moneyline for each team during\nthe 2020 NBA Season",
+       subtitle = " Los Angeles Lakers has the lowest ML on average",
+       caption = "Data Source: Sports-Statistics.com ")
+
+```
+
+# Analysis
+
+## Column 
+
+**Introduction**
+
+Here, we'll show how to use the functions in the package for an exemplary data analysis. Our goal is to see the relationship between pre-game favorites and end-game results.
+
+```{r, message = FALSE, warning = FALSE}
+nba_odds_2020 <- nba_odds_2020 %>%
+  mutate(date = ymd(date))
+
+nba_odds_2020 <- nba_odds_2020 %>%
+  mutate(
+    game_result = purrr::map2(home_score, away_score, ~ case_when(
+      .x > .y ~ "Home Win",
+      .x < .y ~ "Away Win",
+      TRUE ~ "Tie"
+    ))
+  )
+
+nba_odds_2020$game_result <- as.character(nba_odds_2020$game_result)
+
+ggplot(nba_odds_2020, aes(x = home_ml, y = away_ml, color = game_result)) +
+  geom_point() +
+  labs(title = "Moneyline Distribution",
+       subtitle = "NBA 2020 Season",
+       x = "Home Moneyline",
+       y = "Away Moneyline",
+       caption = "Data Source: Sports-Statistics.com ")
+
+```
+
+```{r, message = FALSE, warning = FALSE}
+nba_odds_2020 <- nba_odds_2020 %>%
+  mutate(higher_ml_winner = pmap_chr(list(home_ml, away_ml, game_result),
+                                     function(home_ml, away_ml, game_result) {
+                                       if ((game_result == "Home Win" && home_ml > away_ml) ||
+                                           (game_result == "Away Win" && away_ml > home_ml)) {
+                                         return("Yes")
+                                       } else {
+                                         return("No")
+                                       }
+                                     }))
+
+ggplot(nba_odds_2020, aes(x = higher_ml_winner, fill = game_result)) +
+  geom_bar() +
+  labs(title = "Relationship Between Higher Moneyline and Game Result",
+       subtitle = "NBA 2020 Season",
+       x = "Higher Moneyline Winner",
+       y = "Count",
+       caption = "Data Source: Sports-Statistics.com ") +
+  scale_fill_manual(values = c("Home Win" = "skyblue", "Away Win" = "coral"))
+
+
+```
+
+```{r, message = FALSE, warning = FALSE}
+nba_odds_2020$game_number <- seq_along(nba_odds_2020$away_name)
+ggplot(nba_odds_2020, aes(x = game_number, y = away_ml, group = 1)) +
+  geom_line(color = "blue", linetype = "dashed", aes(y = home_ml)) +
+  facet_wrap(~game_result) +
+  labs(title = "Moneyline Odds Across Games",
+       subtitle = "NBA 2020 Season",
+       x = "Game Number",
+       y = "Moneyline Odds",
+       caption = "Data Source: Sports-Statistics.com ")
+
+```
+
+
+**Summary**
+
+Moneyline for two teams are inversely correlated, with the lower odds moneyline having greater magnitude. "Underdog" away teams prevails more often than underdog home teams.
+

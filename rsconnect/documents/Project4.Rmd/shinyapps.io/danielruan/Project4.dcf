@@ -1,0 +1,12 @@
+name: Project4
+title: Project4
+username: danielruan
+account: danielruan
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 10838978
+bundleId: 8075779
+url: https://danielruan.shinyapps.io/Project4/
+version: 1
+asMultiple: FALSE
+asStatic: FALSE
