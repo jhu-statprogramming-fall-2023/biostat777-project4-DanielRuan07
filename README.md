@@ -1,2 +1,5 @@
-Daniel Ruan
-Link to deployed dashboard: https://danielruan.shinyapps.io/Project4/
+# biostat777-project4-DanielRuan07
+
+Daniel Ruan  
+
+Project 4 dashboard: https://danielruan.shinyapps.io/Project4/
